@@ -3,24 +3,27 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    systems.url = "github:nix-systems/default-linux";
   };
 
-  outputs = { self, nixpkgs }:
-    let
-      supportedSystems = [ "x86_64-linux" "aarch64-linux" ];
-      forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
-      pkgsFor = system: import nixpkgs { inherit system; };
-    in
-    {
-      packages = forAllSystems (system: {
-        default = pkgsFor system.callPackage ./default.nix { };
+  outputs = {
+    self,
+    nixpkgs,
+    systems,
+  }: let
+    inherit (nixpkgs) lib;
+    eachSystem = lib.genAttrs (import systems);
+    pkgsFor = eachSystem (system:
+      import nixpkgs {
+        config = {};
+        localSystem = system;
+        overlays = [];
       });
-
-      apps = forAllSystems (system: {
-        default = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/clutag";
-        };
-      });
-    };
+  in {
+    packages = eachSystem (system: {
+      clutag = pkgsFor.${system}.callPackage ./default.nix {};
+      default = self.packages.${system}.clutag;
+    });
+  };
 }
+
